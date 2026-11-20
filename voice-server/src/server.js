@@ -49,8 +49,11 @@ function fallbackTeXML() {
 }
 
 app.get("/health", (_req, res) => res.json({
-  ok: true, service: "crtc-texml-receptionist", model: config.model,
-  ollama: config.ollamaUrl, activeSessions: sessions.size
+  ok: true,
+  service: "crtc-texml-receptionist",
+  model: config.model,
+  ollamaConfigured: Boolean(config.ollamaUrl),
+  activeSessions: sessions.size
 }));
 
 app.all("/texml/voice", requireToken, (_req, res) => {
@@ -70,21 +73,20 @@ app.all("/texml/voice", requireToken, (_req, res) => {
 });
 
 app.all("/texml/action", requireToken, (_req, res) => {
-  // Handoff is deliberately not enabled until a human destination is configured and separately approved.
+  // A live transfer destination is intentionally not configured in this prototype.
   xml(res, '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling CRTC AI. Your request has been recorded. Goodbye.</Say><Hangup/></Response>');
 });
 
-async function askOllama(session, userText) {
+async function askOllama(session) {
   const controller = new AbortController();
   session.controller?.abort();
   session.controller = controller;
   const timer = setTimeout(() => controller.abort(), config.maxReplyMs);
   try {
-    const history = store.history(session.sessionId, 12);
+    // The current caller turn is persisted before this function is called.
     const messages = [
       { role: "system", content: buildSystemPrompt() },
-      ...history,
-      { role: "user", content: userText }
+      ...store.history(session.sessionId, 12)
     ];
     const response = await fetch(config.ollamaUrl + "/chat/completions", {
       method: "POST",
@@ -142,9 +144,8 @@ wss.on("connection", (ws) => {
       return;
     }
     if (frame.type === "dtmf") {
-      if (frame.digit === "0") {
-        const message = "I can take a callback request. What is your name and the best number to reach you?";
-        ws.send(JSON.stringify({ type: "text", token: message, last: true }));
+      if (frame.digit === "0" && ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: "text", token: "I can take a callback request. What is your name and the best number to reach you?", last: true }));
       }
       return;
     }
@@ -158,7 +159,7 @@ wss.on("connection", (ws) => {
       store.addLead({ sessionId: session.sessionId, caller: session.from, ...lead, intent, summary: userText.slice(0, 1000) });
     }
     try {
-      const reply = await askOllama(session, userText);
+      const reply = await askOllama(session);
       if (ws.readyState !== ws.OPEN) return;
       store.addMessage(session.sessionId, "assistant", reply, intent);
       ws.send(JSON.stringify({ type: "text", token: reply, last: true }));
