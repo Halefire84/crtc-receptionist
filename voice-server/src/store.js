@@ -67,6 +67,9 @@ export function openStore(filename = process.env.DB_PATH || "./data/receptionist
     addLead(lead) {
       insertLead.run(lead.sessionId, lead.caller ?? null, lead.email ?? null, lead.phone ?? null, lead.intent, lead.summary, new Date().toISOString());
     },
+    leadCount(sessionId) {
+      return db.prepare("SELECT COUNT(*) AS count FROM leads WHERE session_id=?").get(sessionId).count;
+    },
     close() { db.close(); }
   };
 }
