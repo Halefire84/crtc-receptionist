@@ -45,7 +45,7 @@ function xml(res, body) {
   res.status(200).type("application/xml").send(body);
 }
 function fallbackTeXML() {
-  return '<?xml version="1.0" encoding="UTF-8"?><Response><Say>We are unable to connect the receptionist right now. Please leave a message after the tone.</Say><Record maxLength="90" playBeep="true"/><Say>Thank you. Goodbye.</Say><Hangup/></Response>';
+  return '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Our receptionist is unavailable right now. Please call back later. Goodbye.</Say><Hangup/></Response>';
 }
 
 app.get("/health", (_req, res) => res.json({
@@ -74,7 +74,7 @@ app.all("/texml/voice", requireToken, (_req, res) => {
 
 app.all("/texml/action", requireToken, (_req, res) => {
   // A live transfer destination is intentionally not configured in this prototype.
-  xml(res, '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling CRTC AI. Your request has been recorded. Goodbye.</Say><Hangup/></Response>');
+  xml(res, '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling CRTC AI. We are unable to complete the request right now. Goodbye.</Say><Hangup/></Response>');
 });
 
 async function askOllama(session) {
@@ -144,7 +144,7 @@ wss.on("connection", (ws) => {
       return;
     }
     if (frame.type === "dtmf") {
-      if (frame.digit === "0" && ws.readyState === ws.OPEN) {
+      if (frame.digit === "0" && ws.readyState === 1) {
         ws.send(JSON.stringify({ type: "text", token: "I can take a callback request. What is your name and the best number to reach you?", last: true }));
       }
       return;
@@ -160,13 +160,13 @@ wss.on("connection", (ws) => {
     }
     try {
       const reply = await askOllama(session);
-      if (ws.readyState !== ws.OPEN) return;
+      if (ws.readyState !== 1) return;
       store.addMessage(session.sessionId, "assistant", reply, intent);
       ws.send(JSON.stringify({ type: "text", token: reply, last: true }));
     } catch (error) {
       if (error.name === "AbortError") return;
       console.error(JSON.stringify({ level: "error", event: "ai_reply_failed", sessionId: session.sessionId, message: error.message }));
-      if (ws.readyState === ws.OPEN) {
+      if (ws.readyState === 1) {
         ws.send(JSON.stringify({ type: "text", token: "I'm having trouble accessing our receptionist system. I can take your name and number for a callback. What is the best way to reach you?", last: true }));
       }
     }
