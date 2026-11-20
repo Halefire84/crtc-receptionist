@@ -196,6 +196,7 @@ export function startVoiceService() {
   process.on("SIGTERM", () => {
     for (const session of service.sessions.values()) session.controller?.abort();
     for (const session of service.sessions.values()) service.store.endCall(session.sessionId, "interrupted");
+    for (const client of service.wss.clients) client.close(1001, "Server shutting down");
     service.server.close(() => { service.store.close(); process.exit(0); });
   });
   return service;
