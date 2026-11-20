@@ -14,6 +14,12 @@ This is an implementation prototype. It has **not** been built or tested on the 
 - A public HTTPS/WSS endpoint for Telnyx to reach. Do not publish or change DNS as part of local development.
 - A Telnyx number with voice enabled and a TeXML application with Conversation Relay available.
 
+## API version and credential distinction
+
+This prototype does not call Telnyx REST endpoints and does not require an API v2 Bearer key to start Conversation Relay. It relies on the TeXML application delivering an inbound HTTP request and TeXML itself opening the WSS session. The TeXML application is configured in Mission Control Portal under Voice → Programmable Voice. Telnyx documents Conversation Relay as startable directly from TeXML.
+
+Do not confuse an account's API v1 token with the separate webhook API version selector shown for Voice API applications. This prototype does not use the Voice API Call Control command path. Actual TeXML application availability and Conversation Relay entitlement must still be verified in the account before integration testing.
+
 ## Local setup
 
 1. Copy `.env.example` to `.env` and fill local values. Generate a random `TEXML_WEBHOOK_TOKEN`; never commit it.
