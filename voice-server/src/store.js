@@ -29,7 +29,7 @@ export function openStore(filename = process.env.DB_PATH || "./data/receptionist
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
     CREATE TABLE IF NOT EXISTS leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL REFERENCES calls(session_id),
+      session_id TEXT NOT NULL UNIQUE REFERENCES calls(session_id),
       caller TEXT,
       email TEXT,
       phone TEXT,
@@ -43,7 +43,14 @@ export function openStore(filename = process.env.DB_PATH || "./data/receptionist
   const insertMessage = db.prepare("INSERT INTO messages(session_id,role,content,intent,created_at) VALUES(?,?,?,?,?)");
   const getMessages = db.prepare("SELECT role,content FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?");
   const updateCall = db.prepare("UPDATE calls SET ended_at=?,status=? WHERE session_id=?");
-  const insertLead = db.prepare("INSERT INTO leads(session_id,caller,email,phone,intent,summary,created_at) VALUES(?,?,?,?,?,?,?)");
+  const insertLead = db.prepare(`INSERT INTO leads(session_id,caller,email,phone,intent,summary,created_at)
+    VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(session_id) DO UPDATE SET
+      caller=COALESCE(excluded.caller,leads.caller),
+      email=COALESCE(excluded.email,leads.email),
+      phone=COALESCE(excluded.phone,leads.phone),
+      intent=excluded.intent,
+      summary=excluded.summary`);
   return {
     startCall(call) {
       insertCall.run(call.sessionId, call.callSid ?? null, call.from ?? null, call.to ?? null, call.direction ?? "inbound", new Date().toISOString());
