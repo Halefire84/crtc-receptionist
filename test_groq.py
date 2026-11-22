@@ -22,7 +22,7 @@ client = Groq(api_key=key)
 # 1. Chat
 print("1/4  Chat (LLaMA 3.3 70B)...")
 resp = client.chat.completions.create(
-    model="llama-3.3-70b-versatile",
+    model="openai/gpt-oss-120b",
     messages=[
         {"role": "system", "content": "You are a receptionist for Coastal Comfort HVAC in Charleston SC."},
         {"role": "user",   "content": "Hi, how much is an AC tune-up?"},
@@ -59,7 +59,7 @@ print("     ✅", transcript[:100])
 # 4. Vision
 print("\n4/4  Vision (Muse Spark Open)...")
 vision_resp = client.chat.completions.create(
-    model="meta-models/muse-spark-open",
+    model="qwen/qwen3.8-27b",
     messages=[{
         "role": "user",
         "content": [

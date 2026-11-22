@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     # Which backend to use for chat: "groq" | "anthropic" | "ollama"
     # Groq is the default — fast, free, no GPU needed
     ai_backend: str = "groq"
-    groq_chat_model: str = "llama-3.3-70b-versatile"
+    groq_chat_model: str = "openai/gpt-oss-120b"       # 120B, 500 tps — best on free tier
     groq_voice_model: str = "whisper-large-v3-turbo"
     groq_tts_model: str = "canopylabs/orpheus-v1-english"
-    groq_tts_voice: str = "troy"          # options: troy, hannah, austin
-    groq_vision_model: str = "meta-models/muse-spark-open"  # 816B MoE, 5 images/req
+    groq_tts_voice: str = "troy"                        # options: troy, hannah, austin
+    groq_vision_model: str = "qwen/qwen3.8-27b"        # multimodal, 3 images/req
 
     secret_key: str = "change-this-to-a-long-random-secret"
     operator_pin: str = "1234"
