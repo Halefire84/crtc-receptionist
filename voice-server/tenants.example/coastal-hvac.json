@@ -1,0 +1,14 @@
+{
+  "slug": "coastal-hvac",
+  "businessName": "Coastal Comfort HVAC",
+  "ownerName": "Mike",
+  "phoneNumbers": ["+18435550199"],
+  "ownerNumbers": ["+18435550111"],
+  "helpContact": "843-555-0111",
+  "liveSms": false,
+  "recording": { "enabled": false, "announcement": "This call may be recorded." },
+  "templates": {
+    "missed_call": "Sorry we missed your call at {business}. Reply with what you need and {owner} will get back to you. Reply STOP to opt out."
+  },
+  "profile": "EXAMPLE ONLY (fictional business).\nServices: AC tune-up $89; repairs quoted after diagnosis.\nHours: Mon-Fri 8am-5pm.\nService area: Mount Pleasant and Charleston.\nNot offered: plumbing, electrical panels."
+}

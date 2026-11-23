@@ -1,63 +1,66 @@
-# CRTC AI Telnyx Voice Receptionist (prototype)
+# CRTC AI receptionist service (Telnyx voice + SMS, Claude API brain)
 
-This isolated Node.js service is the voice adapter for the existing CRTC AI receptionist. It uses Telnyx TeXML to start Conversation Relay, a WebSocket for text-based speech turns, local Ollama for reasoning, and SQLite for call/message/lead persistence.
+A self-hosted Node.js service that answers a local business's phone line and text messages, takes messages and
+appointment requests for the owner, and drafts missed-call texts. Telnyx carries the call (TeXML + Conversation
+Relay for speech) and the texts (Messaging API v2). The Claude API is the brain.
 
-## Important status
+## Status (2026-11-23)
+Tested here with fakes only: **44 tests pass** (`npm test`, Node 22.23). It has **not** been run against a real
+Telnyx account, a real phone call, a real text or the real Claude API (no key in the build container). Nothing is
+deployed, no number is bought, and no phone routing was changed. See "Not done" below.
 
-This is an implementation prototype. It has **not** been built or tested on the CRTC laptop, connected to a Telnyx TeXML application, or used on a live call. It does not change phone-number routing. Do not configure a production number until local tests and a controlled test number/call pass.
+## What it does
+| Job | How | State |
+|---|---|---|
+| Answer calls | TeXML `<Connect><ConversationRelay>`; greeting names the business and says "automated assistant" | Built, simulated-call tested |
+| Talk on the call | `claude-haiku-5-5` quick turns (low effort), rules: profile-only facts, never "booked", never human | Built, fake-client tested |
+| Triage | `claude-haiku-5-5` structured label: message / booking / urgent / question / complaint / handoff / other; regex safety net for emergencies | Built, tested |
+| Take a message / appointment request | Lead row per call or text thread; Sonnet after-call owner summary with numbers masked | Built, tested |
+| Answer texts | `/sms/inbound` (Telnyx v2 webhook): STOP/HELP/START first, then triage + `claude-sonnet-5-5` reply | Built, tested |
+| Per-business setup | `tenants/<slug>.json`: numbers, owner numbers, templates, recording policy, profile (see `tenants.example/`) | Built, tested |
+| Missed-call text-back | Per-tenant template -> DRAFT (never auto-sent); once per caller per day; also `POST /calls/missed` | Built, tested |
+| Owner console API | `/operator/leads`, `/operator/costs`, `/operator/<tenant>/drafts` + approve/discard (Bearer `OPERATOR_TOKEN`) | Built, tested (API only, no UI) |
+| Claude cost log | One `usage_log` row per request: model, input/output/cache tokens, estimated USD; `npm run costs`; monthly stop `CLAUDE_MONTHLY_BUDGET_USD` | Built, tested |
+| Recording | OFF; can only be turned on with a spoken announcement | Enforced in config |
 
-## Requirements
+Prompt-injection handling: caller speech and texts only ever go in `user` turns inside an escaped
+`<caller_message>` wrapper; the system prompt is identical for every caller; replies that leak the prompt are
+replaced; every side effect (opt-out, lead, draft, send) is decided by code, not the model. Tested with six
+attack strings in `test/brain.test.js`, plus "add a recipient" in `test/sms.test.js`.
 
-- Node.js 22.13 or newer (the CRTC laptop has previously reported Node 22.22.1).
-- Existing local Ollama OpenAI-compatible endpoint; default is `http://127.0.0.1:11435/v1`.
-- `qwen3:4b` available locally.
-- A public HTTPS/WSS endpoint for Telnyx to reach. Do not publish or change DNS as part of local development.
-- A Telnyx number with voice enabled and a TeXML application with Conversation Relay available.
+## Run
+```bash
+cp .env.example .env            # fill locally; .env and tenants/ are git-ignored
+mkdir -p tenants && cp tenants.example/coastal-hvac.json tenants/<your-business>.json   # edit it
+npm install
+npm run check && npm test
+npm start                       # 127.0.0.1:8789
+curl localhost:8789/health
+npm run costs                   # Claude spend logged by this service
+```
+`ANTHROPIC_API_KEY` must come from the environment / secret store. With no key, `AI_BACKEND` falls back to the
+local Ollama path from the first prototype and SMS replies use fixed lines.
 
-## API version and credential distinction
+## Telnyx wiring (owner steps)
+1. Buy/choose a Telnyx number; create a TeXML application whose Voice URL is
+   `https://<host>/texml/voice?token=<TEXML_WEBHOOK_TOKEN>`; confirm Conversation Relay is enabled on the account.
+2. Create a Messaging Profile with webhook `https://<host>/sms/inbound`; put its public key in `TELNYX_PUBLIC_KEY`
+   so webhooks are signature-checked; put an API v2 key in `TELNYX_API_KEY` (secret store only).
+3. Register A2P 10DLC before any customer texting (COMPLIANCE.md). Keep `liveSms: false` until then.
+4. Hosting: HOSTING.md (laptop + Cloudflare Tunnel, $0 extra).
 
-This prototype does not call Telnyx REST endpoints and does not require an API v2 Bearer key to start Conversation Relay. It relies on the TeXML application delivering an inbound HTTP request and TeXML itself opening the WSS session. The TeXML application is configured in Mission Control Portal under Voice → Programmable Voice. Telnyx documents Conversation Relay as startable directly from TeXML.
+Owner note (2026-11-21): telephony should be "Telnyx API v2 (SIP, Call Control)". This service uses TeXML +
+Conversation Relay (the PR #1 base) for calls, which needs no Call Control commands, and the v2 REST API for SMS.
+Moving calls to Call Control or raw SIP would be a separate piece of work.
 
-Do not confuse an account's API v1 token with the separate webhook API version selector shown for Voice API applications. This prototype does not use the Voice API Call Control command path. Actual TeXML application availability and Conversation Relay entitlement must still be verified in the account before integration testing.
-
-## Local setup
-
-1. Copy `.env.example` to `.env` and fill local values. Generate a random `TEXML_WEBHOOK_TOKEN`; never commit it.
-2. Install dependencies with `npm install`.
-3. Run `npm run check` and `npm test`.
-4. Start with `npm start`.
-5. Check `GET /health`.
-
-The service binds to loopback by default. Public exposure is intentionally not configured here.
-
-## Telnyx flow
-
-1. The TeXML application's Voice URL must point to `/texml/voice?token=...`.
-2. The service returns a TeXML `<Connect><ConversationRelay>` document.
-3. Telnyx connects to `/conversation-relay?token=...` over WSS and sends a `setup` frame.
-4. Final `prompt` frames are sent to the local Ollama OpenAI-compatible endpoint.
-5. The generated response is returned in a `text` frame with `last: true`.
-6. Calls, transcript messages, and lead summaries are written to SQLite.
-
-The TeXML Voice URL and WebSocket token are separate request paths but share the same high-entropy secret in this prototype. Use a dedicated secret and HTTPS/WSS only.
-
-## Existing CRTC components reused
-
-- The existing Android app's AIClient already targets an OpenAI-compatible local endpoint.
-- The existing Android app's business profile, SMS, booking, conversation, and operator-console features remain untouched.
-- The existing Termux phone-api-hub remains untouched and continues to serve phone controls, SMS/TTS, and AI-bus functions.
-
-## Known limitations / next engineering tasks
-
-- Confirm Telnyx account feature availability and provision a TeXML application in the portal.
-- Validate Telnyx TeXML webhook request behavior and WebSocket session connectivity with a test number.
-- Add signed/request-origin verification for inbound TeXML requests if supported by the selected TeXML configuration; the shared webhook token is an interim endpoint guard.
-- Add structured operator APIs and connect the Moto G console.
-- Add robust callback/handoff routing after the owner supplies and approves a destination.
-- Add call idempotency, rate limits, retention controls, SQLite backup/restore, and systemd service files.
-- Verify pricing for TeXML, Conversation Relay, STT/TTS, and carrier voice before live use.
-- Measure actual local inference latency under concurrent load.
-
-## Privacy and safety
-
-No call recording is enabled. The service stores caller number, transcript text, and extracted contact details locally. Set a retention period before production. It does not collect payment data or secrets. Human transfer is deliberately not enabled. It never uses cloud LLM fallback.
+## Not done / not verified
+- No live Telnyx call, text, webhook signature or 10DLC registration. The Ed25519 check follows Telnyx's documented
+  `timestamp|body` scheme but has only been tested with locally generated keys.
+- No real Claude API request has been made (no key here). Model ids, `output_config`, `fallbacks: "default"` and
+  the beta header follow the claude-api skill reference; the first real run should be watched with `npm run costs`
+  and the Anthropic Console.
+- No calendar: booking requests are requests; the owner confirms. No live transfer to a person.
+- No owner UI (API only); no push/SMS alert to the owner for new leads.
+- Retention period and privacy notice are owner decisions (COMPLIANCE.md section 2 and 4).
+- Resume-plan step 5 (per-tenant SMS drafts, commit f463236 on the laptop) was never pushed to GitHub; it was rebuilt
+  here from the plan notes. "Step 6" and the four open decisions from that plan are not in any repo and are not done.
