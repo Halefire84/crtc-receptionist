@@ -1,4 +1,4 @@
-const PRICING = [
+export const PRICING = [
   "Fast Launch / Starter Site: $499 one-time.",
   "E-Commerce & Systems / Full Build: $1,499 one-time.",
   "Website Care: $99 per month.",
@@ -14,7 +14,9 @@ export function escapeXml(value = "") {
   })[ch]);
 }
 
-export function buildTeXML({ publicBaseUrl, publicWsUrl, webhookToken, voice = "Telnyx.Ultra.Callie", language = "en", transcriptionProvider = "deepgram" }) {
+export const DEFAULT_GREETING = "Thank you for calling CRTC AI. I'm the automated assistant. How can I help you?";
+
+export function buildTeXML({ publicBaseUrl, publicWsUrl, webhookToken, voice = "Telnyx.Ultra.Callie", language = "en", transcriptionProvider = "deepgram", greeting = DEFAULT_GREETING }) {
   if (!publicBaseUrl || !publicWsUrl || !webhookToken) {
     throw new Error("PUBLIC_BASE_URL, PUBLIC_WS_URL and TEXML_WEBHOOK_TOKEN are required");
   }
@@ -32,7 +34,7 @@ export function buildTeXML({ publicBaseUrl, publicWsUrl, webhookToken, voice = "
       voice="${escapeXml(voice)}"
       language="${escapeXml(language)}"
       transcriptionProvider="${escapeXml(transcriptionProvider)}"
-      welcomeGreeting="Thank you for calling CRTC AI. I'm the virtual receptionist. How can I help you?"
+      welcomeGreeting="${escapeXml(greeting)}"
       dtmfDetection="true"
     />
   </Connect>
