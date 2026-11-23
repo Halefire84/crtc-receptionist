@@ -1,0 +1,21 @@
+{
+  "name": "crtc-ai-texml-receptionist",
+  "version": "0.2.0",
+  "private": true,
+  "description": "CRTC AI receptionist: Telnyx TeXML Conversation Relay voice, Telnyx v2 SMS, Claude API brain.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --test",
+    "check": "for f in src/*.js; do node --check $f || exit 1; done",
+    "costs": "node --env-file-if-exists=.env src/costs-report.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
+    "express": "^5.3.0",
+    "ws": "^8.18.3"
+  }
+}
