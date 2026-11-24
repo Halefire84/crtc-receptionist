@@ -6,10 +6,44 @@
 """
 
 import io
+import re
 import base64
 from pathlib import Path
 from groq import Groq
 from app.config import settings
+
+
+def _tts_preprocess(text: str) -> str:
+    """Format text for natural TTS output before sending to Orpheus.
+
+    Orpheus reads '$89' as 'dollar eighty-nine' and phone numbers like
+    '843-754-8988' as 'eight hundred forty-three...' — both sound wrong.
+    This converts to spoken-word equivalents before synthesis.
+    """
+    # Phone numbers: (843) 754-8988 or 843-754-8988 or 8435558988
+    def _phone(m: re.Match) -> str:
+        digits = re.sub(r"\D", "", m.group())
+        if len(digits) == 10:
+            return f"{' '.join(digits[:3])}, {' '.join(digits[3:6])}, {' '.join(digits[6:])}"
+        if len(digits) == 11 and digits[0] == "1":
+            d = digits[1:]
+            return f"{' '.join(d[:3])}, {' '.join(d[3:6])}, {' '.join(d[6:])}"
+        return m.group()
+
+    text = re.sub(r"\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}", _phone, text)
+    text = re.sub(r"\b1?\d{10}\b", _phone, text)
+
+    # Prices: $89 → 89 dollars, $1,200 → 1200 dollars
+    def _price(m: re.Match) -> str:
+        amount = m.group(1).replace(",", "")
+        cents = m.group(2)
+        if cents:
+            return f"{amount} dollars and {cents} cents"
+        return f"{amount} dollars"
+
+    text = re.sub(r"\$(\d[\d,]*)(?:\.(\d{2}))?", _price, text)
+
+    return text
 
 _client: Groq | None = None
 
@@ -66,7 +100,7 @@ def speak(text: str, voice: str | None = None) -> bytes:
     response = _get_client().audio.speech.create(
         model=settings.groq_tts_model,
         voice=voice or settings.groq_tts_voice,
-        input=text,
+        input=_tts_preprocess(text),
         response_format="wav",
     )
     # response is an APIResponse with .content (bytes) or .read()
